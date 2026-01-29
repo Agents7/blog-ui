@@ -1,7 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import MainLayout from '../layout/MainLayout.vue'
 import ContentFeed from '../views/ContentFeed.vue'
+import ArticleDetail from '../views/ArticleDetail.vue'
+import FollowList from '../views/FollowList.vue'
+import SearchResult from '../views/SearchResult.vue'
 import Login from '../components/Login.vue'
+import AdminDashboard from '../views/AdminDashboard.vue'
+import { pinia } from '../stores/pinia'
+import { useAuthStore } from '../stores/auth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -22,10 +29,10 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '热门推荐' }
       },
       {
-        path: 'rank',
-        name: 'Rank',
+        path: 'literature',
+        name: 'Literature',
         component: ContentFeed,
-        meta: { title: '热门榜单' }
+        meta: { title: '文学' }
       },
       {
         path: 'entertainment',
@@ -44,6 +51,30 @@ const routes: RouteRecordRaw[] = [
         name: 'Game',
         component: ContentFeed,
         meta: { title: '游戏' }
+      },
+      {
+        path: 'follow',
+        name: 'FollowList',
+        component: FollowList,
+        meta: { title: '我的关注' }
+      },
+      {
+        path: 'article/:id',
+        name: 'ArticleDetail',
+        component: ArticleDetail,
+        meta: { title: '文章详情' }
+      },
+      {
+        path: 'search',
+        name: 'SearchResult',
+        component: SearchResult,
+        meta: { title: '搜索' }
+      },
+      {
+        path: 'admin',
+        name: 'AdminDashboard',
+        component: AdminDashboard,
+        meta: { title: '管理后台', requiresAdmin: true }
       }
     ]
   }
@@ -54,11 +85,34 @@ const router = createRouter({
   routes
 })
 
-// 简单的路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  if (to.path !== '/login' && !token) {
+const authStore = useAuthStore(pinia)
+
+// 路由守卫
+router.beforeEach((to, _from, next) => {
+
+  authStore.hydrate()
+
+  if (to.path !== '/login' && !authStore.isLoggedIn) {
+    // 如果没有 token 且访问的不是登录页，重定向到登录页
+    ElMessage({
+      message: '请先登录',
+      type: 'warning',
+    })
+    // 存储目标路由，登录后跳转回目标路由
     next({ path: '/login', query: { redirect: to.fullPath } })
+  } else if (to.path === '/login' && authStore.isLoggedIn) {
+    // 如果已经有 token 且访问的是登录页，重定向到首页
+    next({ path: '/' })
+  } else if (to.meta.requiresAdmin) {
+    if (!authStore.isAdmin) {
+      ElMessage({
+        message: '无权限访问管理后台',
+        type: 'error',
+      })
+      next({ path: '/' })
+    } else {
+      next()
+    }
   } else {
     next()
   }
