@@ -1,3 +1,104 @@
+<script setup lang="ts">
+import { reactive, ref } from 'vue'
+import type { FormInstance, FormRules } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import StarryBackground from './StarryBackground.vue'
+import { login, register } from '../api/auth'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
+const formRef = ref<FormInstance>()
+// 登录表单数据
+const form = reactive({
+  username: '',
+  password: '',
+  remember: false,
+})
+
+const isRegister = ref(false) // 是否为注册模式
+
+// 表单验证规则
+const rules = reactive<FormRules>({
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, message: '用户名长度至少为 3 个字符', trigger: 'blur' },
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码长度至少为 6 个字符', trigger: 'blur' },
+  ],
+})
+
+const loading = ref(false)
+
+// 切换登录/注册模式
+const toggleMode = () => {
+  isRegister.value = !isRegister.value
+  formRef.value?.resetFields()
+}
+
+// 提交表单
+const onSubmit = (formEl: FormInstance | undefined) => {
+  if (!formEl) return
+  formEl.validate(async (valid) => {
+    if (valid) {
+      loading.value = true
+      try {
+        if (isRegister.value) {
+          // 注册逻辑
+          await register({
+            username: form.username,
+            password: form.password
+          })
+          ElMessage({
+            message: '注册成功，请登录',
+            type: 'success',
+          })
+          isRegister.value = false // 切换回登录模式
+        } else {
+          // 登录逻辑
+          const res = await login({
+            username: form.username,
+            password: form.password
+          })
+          
+          const token = (res as any).data?.token
+          const roleCode = (res as any).data?.roleCode
+          const roleName = (res as any).data?.roleName
+          
+          if (token) {
+            authStore.setAuth({ token, roleCode, roleName })
+            ElMessage({
+              message: '登录成功',
+              type: 'success',
+            })
+            // 跳转到之前尝试访问的页面，或者主页
+            const redirect = route.query.redirect as string
+            router.push(redirect || '/')
+          } else {
+            // 如果 response 拦截器没有抛出错误，但也没有 token，可能需要处理
+             ElMessage({
+               message: '登录成功但未获取到 Token',
+               type: 'warning',
+             })
+          }
+        }
+      } catch (error) {
+        console.error(error)
+        // 错误已经在 request.ts 拦截器中处理并提示了，这里可以不做额外提示
+      } finally {
+        loading.value = false
+      }
+    }
+  })
+}
+</script>
+
+
 
 <template>
   <div class="min-h-screen flex items-center justify-center relative overflow-hidden">
@@ -64,94 +165,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { reactive, ref } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import StarryBackground from './StarryBackground.vue'
-import { login, register } from '../api/auth'
-import { useRouter, useRoute } from 'vue-router'
-
-const router = useRouter()
-const route = useRoute()
-const formRef = ref<FormInstance>()
-// 登录表单数据
-const form = reactive({
-  username: '',
-  password: '',
-  remember: false,
-})
-
-const isRegister = ref(false) // 是否为注册模式
-
-// 表单验证规则
-const rules = reactive<FormRules>({
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, message: '用户名长度至少为 3 个字符', trigger: 'blur' },
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少为 6 个字符', trigger: 'blur' },
-  ],
-})
-
-const loading = ref(false)
-
-// 切换登录/注册模式
-const toggleMode = () => {
-  isRegister.value = !isRegister.value
-  formRef.value?.resetFields()
-}
-
-// 提交表单
-const onSubmit = (formEl: FormInstance | undefined) => {
-  if (!formEl) return
-  formEl.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        if (isRegister.value) {
-          // 注册逻辑
-          await register({
-            username: form.username,
-            password: form.password
-          })
-          ElMessage.success('注册成功，请登录')
-          isRegister.value = false // 切换回登录模式
-        } else {
-          // 登录逻辑
-          const res = await login({
-            username: form.username,
-            password: form.password
-          })
-          
-          // res 是响应拦截器返回的 Result 对象
-          // 根据你的截图，结构是 { code: 200, message: "...", data: { token: "..." } }
-          const token = (res as any).data?.token
-          
-          if (token) {
-            localStorage.setItem('token', token)
-            ElMessage.success('登录成功')
-            // 跳转到之前尝试访问的页面，或者主页
-            const redirect = route.query.redirect as string
-            router.push(redirect || '/')
-          } else {
-            // 如果 response 拦截器没有抛出错误，但也没有 token，可能需要处理
-             ElMessage.warning('登录成功但未获取到 Token')
-          }
-        }
-      } catch (error) {
-        console.error(error)
-        // 错误已经在 request.ts 拦截器中处理并提示了，这里可以不做额外提示
-      } finally {
-        loading.value = false
-      }
-    }
-  })
-}
-</script>
 
 
 <style scoped>

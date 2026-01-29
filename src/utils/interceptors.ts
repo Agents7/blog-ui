@@ -1,5 +1,9 @@
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
+import { pinia } from '../stores/pinia'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore(pinia)
 
 // 定义统一的接口响应结构
 export interface Result<T = any> {
@@ -12,11 +16,17 @@ export const setupInterceptors = (service: AxiosInstance) => {
   // 请求拦截器
   service.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      // 从 localStorage 获取 token
-      const token = localStorage.getItem('token')
+      authStore.hydrate()
+      const token = authStore.token
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
+
+      // 如果 data 是 FormData，删除 Content-Type，让浏览器自动设置（包含 boundary）
+      if (config.data instanceof FormData) {
+        delete config.headers['Content-Type']
+      }
+
       return config
     },
     (error: any) => {
@@ -37,8 +47,9 @@ export const setupInterceptors = (service: AxiosInstance) => {
 
         // 处理特定错误码，例如 401 未登录
         if (code === 401) {
-          localStorage.removeItem('token')
-          // 这里可以添加跳转到登录页的逻辑
+          authStore.clearAuth()
+          // 强制跳转到登录页
+          window.location.href = '/login'
         }
 
         return Promise.reject(new Error(message || 'Error'))
@@ -54,7 +65,8 @@ export const setupInterceptors = (service: AxiosInstance) => {
       const status = error.response?.status
       if (status === 401) {
         message = '未授权，请登录'
-        localStorage.removeItem('token')
+        authStore.clearAuth()
+        window.location.href = '/login'
       } else if (status === 403) {
         message = '拒绝访问'
       } else if (status === 404) {
